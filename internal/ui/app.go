@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -137,13 +136,9 @@ func (a *App) draw() {
 }
 
 // drawMain paints everything above the bottom bar.
-// (Replaced by the header in Task 6 and the process table in Task 7.)
+// (The process table is added here in Task 7.)
 func (a *App) drawMain(w, h int) {
-	n := 0
-	if a.snap != nil {
-		n = a.snap.Tasks
-	}
-	drawString(a.screen, 0, 0, styleDefault, fmt.Sprintf("htop-go — %d processes", n))
+	a.drawHeader(w)
 }
 
 // fnBarItems is the bottom function-key bar, htop style.
