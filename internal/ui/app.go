@@ -165,6 +165,8 @@ func (a *App) handleKey(ev *tcell.EventKey) {
 		a.handleSearchKey(ev)
 	case ModeFilter:
 		a.handleFilterKey(ev)
+	case ModeSignals:
+		a.handleSignalsKey(ev)
 	}
 }
 
@@ -189,6 +191,15 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 	case ev.Key() == tcell.KeyF5:
 		a.treeMode = !a.treeMode
 		a.rebuild()
+	case ev.Key() == tcell.KeyF7:
+		a.renice(-1)
+	case ev.Key() == tcell.KeyF8:
+		a.renice(1)
+	case ev.Key() == tcell.KeyF9:
+		if len(a.rows) > 0 {
+			a.sigSel = 3 // SIGTERM
+			a.mode = ModeSignals
+		}
 	case ev.Rune() == 'P':
 		a.setSort(SortCPU)
 	case ev.Rune() == 'M':
@@ -208,8 +219,19 @@ func (a *App) draw() {
 	a.screen.Clear()
 	w, h := a.screen.Size()
 	a.drawMain(w, h)
+	if a.mode == ModeSignals {
+		a.drawSignalMenu(a.headerHeight() + 1)
+	}
 	a.drawBottom(w, h)
 	a.screen.Show()
+}
+
+// headerHeight is the row count drawHeader uses (without drawing).
+func (a *App) headerHeight() int {
+	if a.snap == nil {
+		return 0
+	}
+	return (len(a.snap.CPUs)+1)/2 + 3
 }
 
 // drawMain paints the header and the process table.
