@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -105,8 +106,9 @@ func (a *App) refresh() {
 	a.rebuild()
 }
 
-// rebuild recomputes a.rows from a.snap: sort (or tree), then keep the
-// selection on the same PID when possible. (Filter is added in Task 10.)
+// rebuild recomputes a.rows from a.snap: filter, then tree or sort, then
+// keep the selection on the same PID when possible. An active filter
+// bypasses tree mode (flat list), like htop.
 func (a *App) rebuild() {
 	if a.snap == nil {
 		a.rows = nil
@@ -116,9 +118,15 @@ func (a *App) rebuild() {
 	if len(a.rows) > 0 && a.table.Sel < len(a.rows) {
 		selPID = a.rows[a.table.Sel].Proc.PID
 	}
-	procs := make([]proc.Process, len(a.snap.Procs))
-	copy(procs, a.snap.Procs)
-	if a.treeMode {
+	needle := strings.ToLower(a.filter)
+	procs := make([]proc.Process, 0, len(a.snap.Procs))
+	for _, p := range a.snap.Procs {
+		if needle != "" && !strings.Contains(strings.ToLower(p.Cmdline), needle) {
+			continue
+		}
+		procs = append(procs, p)
+	}
+	if a.treeMode && needle == "" {
 		a.rows = buildTreeRows(procs, a.sortBy, a.sortDesc)
 	} else {
 		sortProcs(procs, a.sortBy, a.sortDesc)
@@ -153,6 +161,10 @@ func (a *App) handleKey(ev *tcell.EventKey) {
 	switch a.mode {
 	case ModeNormal:
 		a.handleNormalKey(ev)
+	case ModeSearch:
+		a.handleSearchKey(ev)
+	case ModeFilter:
+		a.handleFilterKey(ev)
 	}
 }
 
@@ -168,6 +180,12 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 	switch {
 	case ev.Key() == tcell.KeyF10, ev.Rune() == 'q':
 		a.quit = true
+	case ev.Key() == tcell.KeyF3:
+		a.mode = ModeSearch
+		a.input = ""
+	case ev.Key() == tcell.KeyF4:
+		a.mode = ModeFilter
+		a.input = a.filter
 	case ev.Key() == tcell.KeyF5:
 		a.treeMode = !a.treeMode
 		a.rebuild()
@@ -210,10 +228,18 @@ var fnBarItems = []struct{ Key, Label string }{
 	{"F7", "Nice-"}, {"F8", "Nice+"}, {"F9", "Kill"}, {"F10", "Quit"},
 }
 
-// drawBottom paints the bottom row: status line if set, else the fn-key bar.
-// (Replaced in Task 10 to also render search/filter input.)
+// drawBottom paints the bottom row: search/filter prompt when typing,
+// else the status line if set, else the fn-key bar.
 func (a *App) drawBottom(w, h int) {
 	y := h - 1
+	switch a.mode {
+	case ModeSearch:
+		drawString(a.screen, 0, y, styleDefault, "Search: "+a.input)
+		return
+	case ModeFilter:
+		drawString(a.screen, 0, y, styleDefault, "Filter: "+a.input)
+		return
+	}
 	if a.status != "" {
 		drawString(a.screen, 0, y, styleStatus, a.status)
 		return
