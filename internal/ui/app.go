@@ -167,6 +167,8 @@ func (a *App) handleKey(ev *tcell.EventKey) {
 		a.handleFilterKey(ev)
 	case ModeSignals:
 		a.handleSignalsKey(ev)
+	case ModeHelp:
+		a.handleHelpKey(ev)
 	}
 }
 
@@ -182,6 +184,8 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 	switch {
 	case ev.Key() == tcell.KeyF10, ev.Rune() == 'q':
 		a.quit = true
+	case ev.Key() == tcell.KeyF1, ev.Rune() == 'h':
+		a.mode = ModeHelp
 	case ev.Key() == tcell.KeyF3:
 		a.mode = ModeSearch
 		a.input = ""
@@ -218,6 +222,11 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 func (a *App) draw() {
 	a.screen.Clear()
 	w, h := a.screen.Size()
+	if a.mode == ModeHelp {
+		a.drawHelp(w, h)
+		a.screen.Show()
+		return
+	}
 	a.drawMain(w, h)
 	if a.mode == ModeSignals {
 		a.drawSignalMenu(a.headerHeight() + 1)
