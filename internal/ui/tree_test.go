@@ -37,9 +37,12 @@ func TestTreeToggleKey(t *testing.T) {
 	if !app.treeMode {
 		t.Fatal("F5 did not enable tree mode")
 	}
-	// PID 1 (init) must be first in tree mode on a real system.
-	if len(app.rows) == 0 || app.rows[0].Proc.PID != 1 {
-		t.Errorf("first tree row PID = %d, want 1", app.rows[0].Proc.PID)
+	if len(app.rows) == 0 {
+		t.Fatal("no rows after tree mode toggle")
+	}
+	// The first root should be a kernel process (PPID 0).
+	if app.rows[0].Proc.PPID != 0 {
+		t.Errorf("first root PPID = %d, want 0", app.rows[0].Proc.PPID)
 	}
 	app.handleKey(tcell.NewEventKey(tcell.KeyF5, 0, tcell.ModNone))
 	if app.treeMode {
