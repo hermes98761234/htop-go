@@ -26,23 +26,38 @@ type Row struct {
 
 // App owns the screen, the scanner, and all UI state.
 type App struct {
-	screen  tcell.Screen
-	scanner *proc.Scanner
-	delay   time.Duration
-	snap    *proc.Snapshot
-	rows    []Row
-	table   Table
-	mode    Mode
-	input   string // text being typed in search/filter mode
-	filter  string // committed filter (empty = none)
-	sigSel  int    // selected entry in the F9 signal menu
-	status  string // transient error/status line
-	quit    bool
+	screen   tcell.Screen
+	scanner  *proc.Scanner
+	delay    time.Duration
+	snap     *proc.Snapshot
+	rows     []Row
+	table    Table
+	sortBy   SortBy
+	sortDesc bool
+	mode     Mode
+	input    string // text being typed in search/filter mode
+	filter   string // committed filter (empty = none)
+	sigSel   int    // selected entry in the F9 signal menu
+	status   string // transient error/status line
+	quit     bool
 }
 
 // NewApp wires a ready-to-run App. The screen must already be Init()ed.
 func NewApp(screen tcell.Screen, scanner *proc.Scanner, delay time.Duration) *App {
-	return &App{screen: screen, scanner: scanner, delay: delay}
+	return &App{
+		screen:   screen,
+		scanner:  scanner,
+		delay:    delay,
+		sortBy:   SortCPU,
+		sortDesc: true,
+	}
+}
+
+// setSort switches the sort key and resets to its natural direction.
+func (a *App) setSort(by SortBy) {
+	a.sortBy = by
+	a.sortDesc = by.defaultDesc()
+	a.rebuild()
 }
 
 // Run drives the event loop until quit. It calls screen.Fini on exit.
@@ -89,8 +104,8 @@ func (a *App) refresh() {
 	a.rebuild()
 }
 
-// rebuild recomputes a.rows from a.snap, keeping the selection on the same
-// PID when possible. (Sorting/filter/tree are added in Tasks 8-10.)
+// rebuild recomputes a.rows from a.snap: sort, then keep the selection on
+// the same PID when possible. (Filter/tree are added in Tasks 9-10.)
 func (a *App) rebuild() {
 	if a.snap == nil {
 		a.rows = nil
@@ -100,8 +115,11 @@ func (a *App) rebuild() {
 	if len(a.rows) > 0 && a.table.Sel < len(a.rows) {
 		selPID = a.rows[a.table.Sel].Proc.PID
 	}
-	rows := make([]Row, 0, len(a.snap.Procs))
-	for _, p := range a.snap.Procs {
+	procs := make([]proc.Process, len(a.snap.Procs))
+	copy(procs, a.snap.Procs)
+	sortProcs(procs, a.sortBy, a.sortDesc)
+	rows := make([]Row, 0, len(procs))
+	for _, p := range procs {
 		rows = append(rows, Row{Proc: p})
 	}
 	a.rows = rows
@@ -145,6 +163,17 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 	switch {
 	case ev.Key() == tcell.KeyF10, ev.Rune() == 'q':
 		a.quit = true
+	case ev.Rune() == 'P':
+		a.setSort(SortCPU)
+	case ev.Rune() == 'M':
+		a.setSort(SortMem)
+	case ev.Rune() == 'T':
+		a.setSort(SortTime)
+	case ev.Rune() == 'N':
+		a.setSort(SortPID)
+	case ev.Rune() == 'I':
+		a.sortDesc = !a.sortDesc
+		a.rebuild()
 	}
 }
 
@@ -164,7 +193,7 @@ func (a *App) drawMain(w, h int) {
 	if tableH < 2 {
 		return
 	}
-	a.table.Draw(a.screen, w, headerH, tableH, a.rows, 8) // 8 = CPU% (sort keys come in Task 8)
+	a.table.Draw(a.screen, w, headerH, tableH, a.rows, a.sortBy.columnIndex())
 }
 
 // fnBarItems is the bottom function-key bar, htop style.
