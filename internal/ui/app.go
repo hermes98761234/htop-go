@@ -34,6 +34,7 @@ type App struct {
 	table    Table
 	sortBy   SortBy
 	sortDesc bool
+	treeMode bool
 	mode     Mode
 	input    string // text being typed in search/filter mode
 	filter   string // committed filter (empty = none)
@@ -104,8 +105,8 @@ func (a *App) refresh() {
 	a.rebuild()
 }
 
-// rebuild recomputes a.rows from a.snap: sort, then keep the selection on
-// the same PID when possible. (Filter/tree are added in Tasks 9-10.)
+// rebuild recomputes a.rows from a.snap: sort (or tree), then keep the
+// selection on the same PID when possible. (Filter is added in Task 10.)
 func (a *App) rebuild() {
 	if a.snap == nil {
 		a.rows = nil
@@ -117,12 +118,16 @@ func (a *App) rebuild() {
 	}
 	procs := make([]proc.Process, len(a.snap.Procs))
 	copy(procs, a.snap.Procs)
-	sortProcs(procs, a.sortBy, a.sortDesc)
-	rows := make([]Row, 0, len(procs))
-	for _, p := range procs {
-		rows = append(rows, Row{Proc: p})
+	if a.treeMode {
+		a.rows = buildTreeRows(procs, a.sortBy, a.sortDesc)
+	} else {
+		sortProcs(procs, a.sortBy, a.sortDesc)
+		rows := make([]Row, 0, len(procs))
+		for _, p := range procs {
+			rows = append(rows, Row{Proc: p})
+		}
+		a.rows = rows
 	}
-	a.rows = rows
 	a.table.ClampTo(len(a.rows))
 	if selPID != 0 {
 		for i := range a.rows {
@@ -163,6 +168,9 @@ func (a *App) handleNormalKey(ev *tcell.EventKey) {
 	switch {
 	case ev.Key() == tcell.KeyF10, ev.Rune() == 'q':
 		a.quit = true
+	case ev.Key() == tcell.KeyF5:
+		a.treeMode = !a.treeMode
+		a.rebuild()
 	case ev.Rune() == 'P':
 		a.setSort(SortCPU)
 	case ev.Rune() == 'M':
