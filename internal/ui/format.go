@@ -1,6 +1,9 @@
 package ui
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // FormatMeter renders a kB amount for meter texts: "800K", "500M", "3.20G".
 func FormatMeter(kb uint64) string {
@@ -32,4 +35,31 @@ func FormatUptime(sec float64) string {
 	default:
 		return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
 	}
+}
+
+// FormatSize renders a kB amount for table columns: plain kB below 100000,
+// then integer MB below 10 GB, then one-decimal GB.
+func FormatSize(kb uint64) string {
+	switch {
+	case kb < 100000:
+		return strconv.FormatUint(kb, 10)
+	case kb < 10*1024*1024:
+		return fmt.Sprintf("%dM", kb/1024)
+	default:
+		return fmt.Sprintf("%.1fG", float64(kb)/(1024*1024))
+	}
+}
+
+// FormatTimePlus renders CPU ticks as htop's TIME+ column:
+// "m:ss.cc" below one hour, else "h:mm:ss". USER_HZ is 100 on Linux.
+func FormatTimePlus(ticks uint64, hz uint64) string {
+	cs := ticks * 100 / hz
+	h := cs / 360000
+	m := cs % 360000 / 6000
+	s := cs % 6000 / 100
+	c := cs % 100
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d.%02d", m, s, c)
 }

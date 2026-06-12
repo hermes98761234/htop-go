@@ -31,6 +31,7 @@ type App struct {
 	delay   time.Duration
 	snap    *proc.Snapshot
 	rows    []Row
+	table   Table
 	mode    Mode
 	input   string // text being typed in search/filter mode
 	filter  string // committed filter (empty = none)
@@ -88,18 +89,31 @@ func (a *App) refresh() {
 	a.rebuild()
 }
 
-// rebuild recomputes a.rows from a.snap. (Sorting, filtering and tree mode
-// are added in later tasks.)
+// rebuild recomputes a.rows from a.snap, keeping the selection on the same
+// PID when possible. (Sorting/filter/tree are added in Tasks 8-10.)
 func (a *App) rebuild() {
 	if a.snap == nil {
 		a.rows = nil
 		return
+	}
+	selPID := 0
+	if len(a.rows) > 0 && a.table.Sel < len(a.rows) {
+		selPID = a.rows[a.table.Sel].Proc.PID
 	}
 	rows := make([]Row, 0, len(a.snap.Procs))
 	for _, p := range a.snap.Procs {
 		rows = append(rows, Row{Proc: p})
 	}
 	a.rows = rows
+	a.table.ClampTo(len(a.rows))
+	if selPID != 0 {
+		for i := range a.rows {
+			if a.rows[i].Proc.PID == selPID {
+				a.table.Sel = i
+				break
+			}
+		}
+	}
 }
 
 func (a *App) handleEvent(ev tcell.Event) {
@@ -120,6 +134,14 @@ func (a *App) handleKey(ev *tcell.EventKey) {
 }
 
 func (a *App) handleNormalKey(ev *tcell.EventKey) {
+	_, h := a.screen.Size()
+	pageRows := h - 10
+	if pageRows < 1 {
+		pageRows = 1
+	}
+	if a.table.HandleKey(ev, len(a.rows), pageRows) {
+		return
+	}
 	switch {
 	case ev.Key() == tcell.KeyF10, ev.Rune() == 'q':
 		a.quit = true
@@ -135,10 +157,14 @@ func (a *App) draw() {
 	a.screen.Show()
 }
 
-// drawMain paints everything above the bottom bar.
-// (The process table is added here in Task 7.)
+// drawMain paints the header and the process table.
 func (a *App) drawMain(w, h int) {
-	a.drawHeader(w)
+	headerH := a.drawHeader(w)
+	tableH := h - headerH - 1 // one row reserved for the bottom bar
+	if tableH < 2 {
+		return
+	}
+	a.table.Draw(a.screen, w, headerH, tableH, a.rows, 8) // 8 = CPU% (sort keys come in Task 8)
 }
 
 // fnBarItems is the bottom function-key bar, htop style.

@@ -34,3 +34,30 @@ func TestFormatUptime(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatSize(t *testing.T) {
+	cases := []struct {
+		kb   uint64
+		want string
+	}{
+		{0, "0"},
+		{99999, "99999"},
+		{100000, "97M"},
+		{2097152, "2048M"},
+		{20971520, "20.0G"},
+	}
+	for _, c := range cases {
+		if got := FormatSize(c.kb); got != c.want {
+			t.Errorf("FormatSize(%d) = %q, want %q", c.kb, got, c.want)
+		}
+	}
+}
+
+func TestFormatTimePlus(t *testing.T) {
+	if got := FormatTimePlus(12345, 100); got != "2:03.45" {
+		t.Errorf("got %q, want 2:03.45", got)
+	}
+	if got := FormatTimePlus(372300, 100); got != "1:02:03" {
+		t.Errorf("got %q, want 1:02:03", got)
+	}
+}
